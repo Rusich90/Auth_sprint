@@ -1,0 +1,76 @@
+version: "3.8"
+
+services:
+  app:
+    image: auth_server
+    build:
+      context: ..
+      target: development
+    ports:
+      - "127.0.0.1:3000:3000"
+    environment:
+      - PORT_APP=3000
+      - SQLALCHEMY_HOST=postgres
+      - REDIS_HOST=redis
+    env_file:
+      - ../.env
+    volumes:
+      - "../app:/src/app"
+    depends_on:
+      - redis
+      - postgres
+
+  super_user:
+    build:
+      context: ..
+      target: development
+    command: [ "flask", "create_superuser" ,"-u" ,"superuser", "-p", "superpassword"]
+    environment:
+      - SQLALCHEMY_HOST=postgres
+      - REDIS_HOST=redis
+    env_file:
+      - ../.env
+    volumes:
+      - "../app:/src/app"
+    depends_on:
+      - redis
+      - postgres
+      - app
+
+
+  tests:
+      build:
+        context: ..
+        target: development
+      command: [ "pytest", "-v" ]
+      env_file:
+        - ../.env
+      environment:
+        - SQLALCHEMY_HOST=postgres
+        - REDIS_HOST=redis
+        - TEST_URL=http://app:3000
+      volumes:
+        - "../app:/src/app"
+        - "./functional:/src/tests"
+        - "../pyproject.toml:/src/pyproject.toml"
+      depends_on:
+        - redis
+        - postgres
+        - app
+        - super_user
+
+  redis:
+    image: redis:6-alpine
+    restart: on-failure
+    ports:
+      - "6379:6379"
+
+  postgres:
+    image: postgres:14
+    restart: on-failure
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: pguser
+      POSTGRES_PASSWORD: pgpassword
+      POSTGRES_DB: auth_db
